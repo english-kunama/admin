@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel - Approve or Deny Submissions</title>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import { getDatabase, ref, push, set, query, get, remove } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDyOgYzDMZdo5V21T8fgHTvPhfgIavuxBA",
+      authDomain: "kunama-academy-data.firebaseapp.com",
+      databaseURL: "https://kunama-academy-data-default-rtdb.firebaseio.com",
+      projectId: "kunama-academy-data",
+      storageBucket: "kunama-academy-data.firebasestorage.app",
+      messagingSenderId: "1089407925060",
+      appId: "1:1089407925060:web:260a1f597ed520fc977511"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Add New Phrase to Firebase
+    function addNewPhraseToFirebase(phrase, translation) {
+      const newSubmissionsRef = ref(db, 'pending_submissions');
+      const newPhraseRef = push(newSubmissionsRef);
+      set(newPhraseRef, {
+        phrase,
+        translation,
+        timestamp: new Date().toISOString()
+      }).then(() => {
+        document.getElementById("statusMessage").innerText = "✅ Phrase submitted, waiting for approval!";
+        document.getElementById("newPhrase").value = "";
+        document.getElementById("newTranslation").value = "";
+        loadPendingSubmissions(); // Reload pending submissions after adding
+      }).catch((error) => {
+        document.getElementById("statusMessage").innerText = "❌ Error: " + error.message;
+      });
+    }
+
+    // Load Pending Submissions for Admin Panel
+    async function loadPendingSubmissions() {
+      const pendingRef = ref(db, 'pending_submissions'); // Refer to the correct node in Firebase
+      try {
+        const snapshot = await get(pendingRef);
+        const pendingContainer = document.getElementById("pendingSubmissions");
+        pendingContainer.innerHTML = ""; // Clear current pending list
+
+        if (snapshot.exists()) {
+          snapshot.forEach((childSnapshot) => {
+            const entry = childSnapshot.val();
+            const submissionId = childSnapshot.key; // Get the ID for the submission
+            const phrase = entry.phrase;
+            const translation = entry.translation;
+
+            // Display each pending submission in the admin panel
+            pendingContainer.innerHTML += `
+              <div class="submission">
+                <p><strong>${phrase}</strong> → ${translation}</p>
+                <button onclick="approveSubmission('${submissionId}')">Approve</button>
+                <button class="deny-button" onclick="denySubmission('${submissionId}')">Deny</button>
+              </div>
+            `;
+          });
+        } else {
+          pendingContainer.innerHTML = "<p>No pending submissions found.</p>";
+        }
+      } catch (error) {
+        console.error("Error loading pending submissions:", error);
+        document.getElementById("pendingSubmissions").innerHTML = "<p>❌ Error fetching data.</p>";
+      }
+    }
+
+    // Approve Phrase
+    window.approveSubmission = function(submissionId) {
+      const submissionRef = ref(db, 'pending_submissions/' + submissionId);
+      get(submissionRef).then((snapshot) => {
+        if (snapshot.exists()) {
+          const entry = snapshot.val();
+          const approvedRef = ref(db, 'approved_phrases/' + submissionId);
+          set(approvedRef, entry)
+            .then(() => {
+              remove(submissionRef); // Remove from pending after approval
+              loadPendingSubmissions(); // Reload pending submissions after approval
+            })
+            .catch((error) => {
+              console.error("Error saving approved phrase:", error);
+            });
+        }
+      });
+    }
+
+    // Deny Phrase
+    window.denySubmission = function(submissionId) {
+      const submissionRef = ref(db, 'pending_submissions/' + submissionId);
+      remove(submissionRef) // Remove from pending submissions
+        .then(() => {
+          loadPendingSubmissions(); // Reload pending submissions after denial
+        })
+        .catch((error) => {
+          console.error("Error removing denied phrase:", error);
+        });
+    }
+
+    // Event Listeners
+    document.addEventListener("DOMContentLoaded", () => {
+      loadPendingSubmissions(); // Load pending submissions when the page is loaded
+    });
+  </script>
+
+  <style>
+	  body {
+		font-family: 'Arial', sans-serif;
+		background-color: #e0e5ec; /* Soft light background */
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		height: 100vh;
+		margin: 0;
+		padding: 0 15px;
+	  }
+
+	  .container {
+		background-color: #ffffff;
+		padding: 30px;
+		border-radius: 12px;
+		box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+		max-width: 700px;
+		width: 100%;
+		text-align: center;
+		overflow: hidden;
+		animation: fadeIn 0.8s ease-out; /* Fade in animation */
+	  }
+
+	  h2 {
+		color: #2a5298;
+		font-size: 24px;
+		margin-bottom: 20px;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+		font-weight: bold;
+	  }
+
+	  .submission {
+		background-color: #f9f9f9;
+		padding: 20px;
+		margin-bottom: 20px;
+		border-radius: 8px;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+		text-align: left;
+		transition: transform 0.3s ease;
+	  }
+
+	  .submission:hover {
+		transform: translateY(-5px); /* Hover effect for the submission */
+		box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Darker shadow on hover */
+	  }
+
+	  .submission p {
+		margin: 8px 0;
+		font-size: 16px;
+		line-height: 1.5;
+		color: #333;
+	  }
+
+	  .submission button {
+		background-color: #28a745;
+		color: white;
+		border: none;
+		padding: 12px 25px;
+		font-size: 16px;
+		cursor: pointer;
+		border-radius: 5px;
+		transition: background-color 0.3s, transform 0.2s;
+		margin-right: 15px;
+		margin-top: 10px;
+	  }
+
+	  .submission button:hover {
+		background-color: #218838;
+		transform: scale(1.05); /* Slight scale-up effect on hover */
+	  }
+
+	  .submission .deny-button {
+		background-color: #dc3545;
+	  }
+
+	  .submission .deny-button:hover {
+		background-color: #c82333;
+		transform: scale(1.05); /* Slight scale-up effect on hover */
+	  }
+
+	  .submission .approve-button {
+		background-color: #007bff;
+	  }
+
+	  .submission .approve-button:hover {
+		background-color: #0056b3;
+	  }
+
+	  #statusMessage {
+		font-size: 16px;
+		color: #fff;
+		background-color: #4CAF50;
+		padding: 10px;
+		border-radius: 5px;
+		margin-top: 20px;
+		display: none; /* Initially hidden */
+	  }
+
+	  #statusMessage.error {
+		background-color: #f44336; /* Red for error */
+	  }
+
+	  /* Responsive Design */
+	  @media (max-width: 480px) {
+		.container {
+		  padding: 20px;
+		}
+
+		.submission {
+		  padding: 15px;
+		}
+
+		h2 {
+		  font-size: 20px;
+		}
+
+		.submission button {
+		  width: 100%; /* Make buttons take full width on small screens */
+		}
+	  }
+
+	  /* Keyframe animation for fade-in */
+	  @keyframes fadeIn {
+		from {
+		  opacity: 0;
+		}
+		to {
+		  opacity: 1;
+		}
+	  }
+</style>
+
+</head>
+<body>
+  <div class="container">
+    <h2>Admin Panel - Galla</h2>
+
+    <div id="pendingSubmissions">
+      <!-- Pending submissions will appear here -->
+    </div>
+
+    <div id="statusMessage"></div>
+  </div>
+</body>
+</html>
